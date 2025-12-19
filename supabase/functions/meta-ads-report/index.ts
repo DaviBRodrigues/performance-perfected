@@ -189,8 +189,10 @@ serve(async (req) => {
           link_clicks: campaignLinkClicks,
           ctr: campaignImpressions > 0 ? (campaignLinkClicks / campaignImpressions) * 100 : 0,
           messages_started: campaignMessagesStarted,
+          cost_per_message: campaignMessagesStarted > 0 ? campaignSpend / campaignMessagesStarted : 0,
           conversions: campaignConversions,
           purchases: campaignPurchases,
+          cost_per_purchase: campaignPurchases > 0 ? campaignSpend / campaignPurchases : 0,
         });
       });
     }
