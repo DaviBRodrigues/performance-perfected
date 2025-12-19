@@ -181,8 +181,10 @@ serve(async (req) => {
           });
         }
 
+        const campaignName = campaign.campaign_name || 'Campanha sem nome';
         campaigns.push({
-          name: campaign.campaign_name || 'Campanha sem nome',
+          name: campaignName,
+          objective: campaignObjectives[campaignName] || 'UNKNOWN',
           reach: campaignReach,
           impressions: campaignImpressions,
           spend: campaignSpend,

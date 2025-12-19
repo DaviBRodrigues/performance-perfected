@@ -72,6 +72,7 @@ export interface ReportData {
 
 export interface CampaignData {
   name: string;
+  objective?: string;
   reach?: number;
   impressions?: number;
   spend?: number;
