@@ -25,7 +25,12 @@ const DAYS_OF_WEEK = [
 
 const HOURS = Array.from({ length: 24 }, (_, i) => ({
   value: String(i).padStart(2, '0'),
-  label: `${String(i).padStart(2, '0')}:00`,
+  label: String(i).padStart(2, '0'),
+}));
+
+const MINUTES = Array.from({ length: 60 }, (_, i) => ({
+  value: String(i).padStart(2, '0'),
+  label: String(i).padStart(2, '0'),
 }));
 
 export default function Scheduler() {
@@ -169,39 +174,54 @@ export default function Scheduler() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Dia da Semana</Label>
-                  <Select 
-                    value={formData.day_of_week} 
-                    onValueChange={v => setFormData({...formData, day_of_week: v})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DAYS_OF_WEEK.map(day => (
-                        <SelectItem key={day.value} value={day.value}>
-                          {day.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <Label>Dia da Semana</Label>
+                <Select 
+                  value={formData.day_of_week} 
+                  onValueChange={v => setFormData({...formData, day_of_week: v})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS_OF_WEEK.map(day => (
+                      <SelectItem key={day.value} value={day.value}>
+                        {day.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div>
-                  <Label>Horário (UTC)</Label>
+              <div>
+                <Label>Horário (UTC)</Label>
+                <div className="grid grid-cols-2 gap-2">
                   <Select 
                     value={formData.run_time.split(':')[0]} 
-                    onValueChange={v => setFormData({...formData, run_time: `${v}:00`})}
+                    onValueChange={v => setFormData({...formData, run_time: `${v}:${formData.run_time.split(':')[1] || '00'}`})}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Hora" />
                     </SelectTrigger>
                     <SelectContent>
                       {HOURS.map(hour => (
                         <SelectItem key={hour.value} value={hour.value}>
                           {hour.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select 
+                    value={formData.run_time.split(':')[1] || '00'} 
+                    onValueChange={v => setFormData({...formData, run_time: `${formData.run_time.split(':')[0]}:${v}`})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Min" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MINUTES.map(min => (
+                        <SelectItem key={min.value} value={min.value}>
+                          {min.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
