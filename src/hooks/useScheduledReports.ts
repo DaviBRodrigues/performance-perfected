@@ -24,6 +24,7 @@ export interface ScheduledReport {
   report_format?: {
     id: string;
     name: string;
+    metrics: Array<{ key: string; label: string }>;
   };
 }
 
@@ -39,7 +40,7 @@ export function useScheduledReports() {
       
       const { data, error } = await supabase
         .from('scheduled_reports')
-        .select('*, client:clients(id, name, account_id), report_format:report_formats(id, name)')
+        .select('*, client:clients(id, name, account_id), report_format:report_formats(id, name, metrics)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       

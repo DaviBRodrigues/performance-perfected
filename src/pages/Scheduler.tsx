@@ -12,7 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil, Trash2, Loader2, Calendar, Clock, Send, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Calendar, Clock, Send, FileText, Play } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 const DAYS_OF_WEEK = [
   { value: '0', label: 'Domingo' },
@@ -39,8 +41,10 @@ export default function Scheduler() {
   const { clients } = useClients();
   const { formats } = useReportFormats();
   const { scheduledReports, isLoading, createScheduledReport, updateScheduledReport, deleteScheduledReport } = useScheduledReports();
+  const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
+  const [testingScheduleId, setTestingScheduleId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     client_id: '',
     webhook_url: 'https://hook.us2.make.com/ubpb53m819d72abao2kcd3bluqj6ffal',
@@ -115,6 +119,164 @@ export default function Scheduler() {
   const formatLastRun = (date: string | null) => {
     if (!date) return 'Nunca executado';
     return new Date(date).toLocaleString('pt-BR');
+  };
+
+  const handleTestNow = async (schedule: typeof scheduledReports[0]) => {
+    if (!user || !schedule.client) return;
+    
+    setTestingScheduleId(schedule.id);
+    
+    try {
+      // Get the date range for the previous week
+      const now = new Date();
+      const currentDay = now.getDay();
+      const daysToLastMonday = currentDay === 0 ? 6 : currentDay + 6;
+      
+      const lastMonday = new Date(now);
+      lastMonday.setDate(now.getDate() - daysToLastMonday);
+      
+      const lastSunday = new Date(lastMonday);
+      lastSunday.setDate(lastMonday.getDate() + 6);
+      
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      const startDate = formatDate(lastMonday);
+      const endDate = formatDate(lastSunday);
+      
+      // Call meta-ads-report to get the data
+      const { data: reportData, error: reportError } = await supabase.functions.invoke('meta-ads-report', {
+        body: {
+          accountId: schedule.client.account_id,
+          startDate,
+          endDate,
+          userId: user.id,
+          bestAdScope: 'all',
+        },
+      });
+
+      if (reportError || reportData?.error) {
+        throw new Error(reportError?.message || reportData?.error || 'Erro ao buscar dados');
+      }
+
+      // Get the report format metrics
+      const metricsToShow = schedule.report_format?.metrics || [
+        { key: 'reach', label: '👥 Alcance' },
+        { key: 'impressions', label: '👁️ Impressões' },
+        { key: 'link_clicks', label: '🔗 Cliques no Link' },
+        { key: 'messages_started', label: '💬 Mensagens Iniciadas' },
+        { key: 'cost_per_message', label: '💰 Custo por Mensagem' },
+        { key: 'instagram_visits', label: '📱 Visitas ao Instagram' },
+        { key: 'total_spend', label: '💲 Investimento Total' },
+      ];
+
+      // Format metric value
+      const formatMetricValue = (key: string, value: number | string | undefined): string => {
+        if (value === undefined || value === null) return '-';
+        if (typeof value === 'string') return value;
+        
+        switch (key) {
+          case 'total_spend':
+          case 'cost_per_message':
+          case 'cost_per_conversion':
+            return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+          case 'ctr_link_click':
+            return `${value.toFixed(2)}%`;
+          default:
+            return value.toLocaleString('pt-BR');
+        }
+      };
+
+      // Generate WhatsApp text
+      const formatDatePt = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+      };
+
+      let whatsappText = `📊 *RELATÓRIO SEMANAL - ${schedule.client.name.toUpperCase()}*\n`;
+      whatsappText += `📅 Período: ${formatDatePt(startDate)} a ${formatDatePt(endDate)}\n\n`;
+      whatsappText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+      (metricsToShow as Array<{key: string; label: string}>).forEach((metric) => {
+        const value = reportData[metric.key];
+        if (value !== undefined && value !== null) {
+          whatsappText += `${metric.label} ${formatMetricValue(metric.key, value)}\n`;
+        }
+      });
+
+      if (reportData.best_ad) {
+        whatsappText += `\n⭐ *Melhor Anúncio:* ${reportData.best_ad}\n`;
+      }
+
+      // Add campaigns section
+      if (reportData.campaigns && reportData.campaigns.length > 0) {
+        whatsappText += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+        whatsappText += `📈 *CAMPANHAS*\n\n`;
+
+        reportData.campaigns.forEach((campaign: any, idx: number) => {
+          whatsappText += `*${idx + 1}. ${campaign.name}*\n`;
+          if (campaign.reach) whatsappText += `   Alcance: ${campaign.reach.toLocaleString('pt-BR')}\n`;
+          if (campaign.impressions) whatsappText += `   Impressões: ${campaign.impressions.toLocaleString('pt-BR')}\n`;
+          if (campaign.spend) whatsappText += `   Investimento: R$ ${campaign.spend.toFixed(2)}\n`;
+          if (campaign.link_clicks) whatsappText += `   Cliques: ${campaign.link_clicks.toLocaleString('pt-BR')}\n`;
+          if (campaign.messages_started && campaign.messages_started > 0) {
+            whatsappText += `   Mensagens: ${campaign.messages_started}\n`;
+            if (campaign.cost_per_message) {
+              whatsappText += `   Custo/Mensagem: R$ ${campaign.cost_per_message.toFixed(2)}\n`;
+            }
+          }
+          if (campaign.purchases && campaign.purchases > 0) {
+            whatsappText += `   Compras: ${campaign.purchases}\n`;
+            if (campaign.cost_per_purchase) {
+              whatsappText += `   Custo/Compra: R$ ${campaign.cost_per_purchase.toFixed(2)}\n`;
+            }
+          }
+          whatsappText += '\n';
+        });
+      }
+
+      // Build payload
+      const payload = {
+        cliente: schedule.client.name,
+        account_id: schedule.client.account_id,
+        periodo: {
+          inicio: startDate,
+          fim: endDate,
+        },
+        metricas: reportData,
+        format_name: schedule.report_format?.name || 'Padrão',
+        gerado_em: new Date().toISOString(),
+      };
+
+      // Send to webhook
+      await fetch(schedule.webhook_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload,
+          whatsapp_text: whatsappText,
+        }),
+      });
+
+      toast({
+        title: 'Teste enviado!',
+        description: 'O relatório foi enviado para o webhook com sucesso.',
+      });
+
+    } catch (error: any) {
+      console.error('Error testing schedule:', error);
+      toast({
+        title: 'Erro ao testar',
+        description: error.message || 'Não foi possível enviar o relatório de teste.',
+        variant: 'destructive',
+      });
+    } finally {
+      setTestingScheduleId(null);
+    }
   };
 
   // Get clients that don't have a schedule yet
@@ -340,6 +502,19 @@ export default function Scheduler() {
                   Última execução: {formatLastRun(schedule.last_run_at)}
                 </p>
                 <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleTestNow(schedule)}
+                    disabled={testingScheduleId === schedule.id}
+                    title="Testar agora"
+                  >
+                    {testingScheduleId === schedule.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => openEdit(schedule)}>
                     <Pencil className="w-4 h-4" />
                   </Button>
