@@ -15,6 +15,7 @@ interface MetaAdsRequest {
   startDate: string;
   endDate: string;
   userId: string;
+  bestAdScope?: 'all' | 'by_campaign' | 'by_objective';
 }
 
 serve(async (req) => {
@@ -24,9 +25,9 @@ serve(async (req) => {
   }
 
   try {
-    const { accountId, startDate, endDate, userId } = await req.json() as MetaAdsRequest;
+    const { accountId, startDate, endDate, userId, bestAdScope = 'all' } = await req.json() as MetaAdsRequest;
     
-    console.log('Meta Ads API request:', { accountId, startDate, endDate, userId });
+    console.log('Meta Ads API request:', { accountId, startDate, endDate, userId, bestAdScope });
 
     // Get access token from settings
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -90,6 +91,20 @@ serve(async (req) => {
     console.log('Fetching account reach...');
     const accountReachResponse = await fetch(accountReachUrl);
     const accountReachData = await accountReachResponse.json();
+
+    // Get campaigns data with objectives
+    const campaignsUrl = `${URL_BASE}/${formattedAccountId}/campaigns?fields=id,name,objective&access_token=${accessToken}`;
+    console.log('Fetching campaigns objectives...');
+    const campaignsResponse = await fetch(campaignsUrl);
+    const campaignsData = await campaignsResponse.json();
+    
+    // Map campaign names to objectives
+    const campaignObjectives: Record<string, string> = {};
+    if (campaignsData.data) {
+      campaignsData.data.forEach((c: any) => {
+        campaignObjectives[c.name] = c.objective || 'UNKNOWN';
+      });
+    }
 
     // Get top performing ad
     const adsFields = ['ad_name', 'campaign_name', 'spend', 'impressions', 'actions', 'reach'].join(',');
@@ -185,26 +200,65 @@ serve(async (req) => {
       totalReach = parseInt(accountReachData.data[0].reach || '0');
     }
 
-    // Find best performing ad
+    // Calculate ad performance value
+    const calculateAdValue = (ad: any) => {
+      let value = 0;
+      if (ad.actions) {
+        ad.actions.forEach((action: any) => {
+          if (action.action_type === 'link_click') {
+            value += parseInt(action.value || '0');
+          }
+          if (action.action_type.includes('messaging_conversation_started')) {
+            value += parseInt(action.value || '0') * 2;
+          }
+          if (action.action_type === 'purchase' || action.action_type.includes('fb_pixel_purchase')) {
+            value += parseInt(action.value || '0') * 5;
+          }
+        });
+      }
+      return value;
+    };
+
+    // Find best performing ads based on scope
     let bestAd = 'N/A';
+    let bestAdsByCampaign: Record<string, string> = {};
+    let bestAdsByObjective: Record<string, string> = {};
+
     if (adsData.data && adsData.data.length > 0) {
+      // Best ad overall
       let highestValue = -1;
+      const campaignBests: Record<string, { name: string; value: number }> = {};
+      const objectiveBests: Record<string, { name: string; value: number }> = {};
+
       adsData.data.forEach((ad: any) => {
-        let adValue = 0;
-        if (ad.actions) {
-          ad.actions.forEach((action: any) => {
-            if (action.action_type === 'link_click') {
-              adValue += parseInt(action.value || '0');
-            }
-            if (action.action_type.includes('messaging_conversation_started')) {
-              adValue += parseInt(action.value || '0') * 2; // Weight messages higher
-            }
-          });
-        }
+        const adValue = calculateAdValue(ad);
+        const adName = ad.ad_name || 'Anúncio sem nome';
+        const campaignName = ad.campaign_name || 'Campanha desconhecida';
+        const objective = campaignObjectives[campaignName] || 'UNKNOWN';
+
+        // Overall best
         if (adValue > highestValue) {
           highestValue = adValue;
-          bestAd = ad.ad_name || 'Anúncio sem nome';
+          bestAd = adName;
         }
+
+        // Best by campaign
+        if (!campaignBests[campaignName] || adValue > campaignBests[campaignName].value) {
+          campaignBests[campaignName] = { name: adName, value: adValue };
+        }
+
+        // Best by objective
+        if (!objectiveBests[objective] || adValue > objectiveBests[objective].value) {
+          objectiveBests[objective] = { name: adName, value: adValue };
+        }
+      });
+
+      // Convert to final format
+      Object.entries(campaignBests).forEach(([campaign, data]) => {
+        bestAdsByCampaign[campaign] = data.name;
+      });
+      Object.entries(objectiveBests).forEach(([objective, data]) => {
+        bestAdsByObjective[objective] = data.name;
       });
     }
 
@@ -212,6 +266,14 @@ serve(async (req) => {
     const ctrLinkClick = totalImpressions > 0 ? (totalLinkClicks / totalImpressions) * 100 : 0;
     const costPerMessage = totalMessagesStarted > 0 ? totalSpend / totalMessagesStarted : 0;
     const costPerConversion = totalConversions > 0 ? totalSpend / totalConversions : 0;
+
+    // Choose which best ad format to return based on scope
+    let bestAdResult: any = bestAd;
+    if (bestAdScope === 'by_campaign') {
+      bestAdResult = bestAdsByCampaign;
+    } else if (bestAdScope === 'by_objective') {
+      bestAdResult = bestAdsByObjective;
+    }
 
     const reportData = {
       reach: totalReach,
@@ -227,7 +289,8 @@ serve(async (req) => {
       checkouts_initiated: totalCheckoutsInitiated,
       instagram_visits: totalInstagramVisits,
       total_spend: parseFloat(totalSpend.toFixed(2)),
-      best_ad: bestAd,
+      best_ad: bestAdResult,
+      best_ad_scope: bestAdScope,
       campaigns: campaigns,
     };
 

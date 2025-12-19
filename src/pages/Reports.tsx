@@ -30,7 +30,7 @@ export default function Reports() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [formData, setFormData] = useState({ client_id: '', report_format_id: '', start_date: '', end_date: '' });
+  const [formData, setFormData] = useState({ client_id: '', report_format_id: '', start_date: '', end_date: '', best_ad_scope: 'all' as 'all' | 'by_campaign' | 'by_objective' });
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
@@ -54,6 +54,7 @@ export default function Reports() {
           startDate: formData.start_date,
           endDate: formData.end_date,
           userId: user.id,
+          bestAdScope: formData.best_ad_scope,
         },
       });
 
@@ -91,7 +92,7 @@ export default function Reports() {
 
       toast({ title: 'Relatório gerado!', description: 'Dados reais obtidos da API do Meta Ads.' });
       setIsDialogOpen(false);
-      setFormData({ client_id: '', report_format_id: '', start_date: '', end_date: '' });
+      setFormData({ client_id: '', report_format_id: '', start_date: '', end_date: '', best_ad_scope: 'all' });
 
     } catch (err: any) {
       console.error('Error generating report:', err);
@@ -151,6 +152,27 @@ export default function Reports() {
     return labels[key] || key;
   };
 
+  const formatObjectiveLabel = (objective: string): string => {
+    const objectiveLabels: Record<string, string> = {
+      'OUTCOME_TRAFFIC': '🚗 Tráfego',
+      'OUTCOME_ENGAGEMENT': '💬 Engajamento',
+      'OUTCOME_LEADS': '📋 Leads',
+      'OUTCOME_SALES': '🛒 Vendas',
+      'OUTCOME_AWARENESS': '👁️ Reconhecimento',
+      'OUTCOME_APP_PROMOTION': '📱 Promoção de App',
+      'LINK_CLICKS': '🔗 Cliques no Link',
+      'MESSAGES': '💬 Mensagens',
+      'CONVERSIONS': '🎯 Conversões',
+      'REACH': '👥 Alcance',
+      'BRAND_AWARENESS': '🌟 Reconhecimento de Marca',
+      'VIDEO_VIEWS': '🎬 Visualizações de Vídeo',
+      'POST_ENGAGEMENT': '❤️ Engajamento',
+      'PAGE_LIKES': '👍 Curtidas na Página',
+      'UNKNOWN': '❓ Desconhecido',
+    };
+    return objectiveLabels[objective] || objective;
+  };
+
   const copyReportText = (report: Report) => {
     const format = report.report_format;
     const metricsToShow = format?.metrics || [
@@ -172,7 +194,14 @@ export default function Reports() {
     });
 
     if (report.data.best_ad) {
-      text += `\n⭐ *Melhor Anúncio:* ${report.data.best_ad}\n`;
+      if (typeof report.data.best_ad === 'string') {
+        text += `\n⭐ *Melhor Anúncio:* ${report.data.best_ad}\n`;
+      } else {
+        text += `\n⭐ *Melhores Anúncios:*\n`;
+        Object.entries(report.data.best_ad as Record<string, string>).forEach(([key, value]) => {
+          text += `• ${formatObjectiveLabel(key)}: ${value}\n`;
+        });
+      }
     }
 
     if (report.data.campaigns && report.data.campaigns.length > 0) {
@@ -222,6 +251,17 @@ export default function Reports() {
               <div className="grid grid-cols-2 gap-4">
                 <div><Label>Data Início</Label><Input type="date" value={formData.start_date} onChange={e => setFormData({...formData, start_date: e.target.value})} required /></div>
                 <div><Label>Data Fim</Label><Input type="date" value={formData.end_date} onChange={e => setFormData({...formData, end_date: e.target.value})} required /></div>
+              </div>
+              <div>
+                <Label>Escopo do Melhor Anúncio</Label>
+                <Select value={formData.best_ad_scope} onValueChange={v => setFormData({...formData, best_ad_scope: v as 'all' | 'by_campaign' | 'by_objective'})}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o escopo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">🏆 Melhor anúncio geral</SelectItem>
+                    <SelectItem value="by_campaign">📊 Melhor anúncio por campanha</SelectItem>
+                    <SelectItem value="by_objective">🎯 Melhor anúncio por objetivo (Mensagens, Alcance, etc.)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" className="w-full" disabled={isGenerating || !formData.client_id}>
                 {isGenerating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -340,8 +380,19 @@ export default function Reports() {
                 {/* Melhor Anúncio */}
                 {selectedReport.data.best_ad && (
                   <div className="p-4 rounded-lg bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20">
-                    <p className="text-sm text-muted-foreground mb-1">⭐ Melhor Anúncio</p>
-                    <p className="font-semibold">{selectedReport.data.best_ad}</p>
+                    <p className="text-sm text-muted-foreground mb-2">⭐ Melhor Anúncio</p>
+                    {typeof selectedReport.data.best_ad === 'string' ? (
+                      <p className="font-semibold">{selectedReport.data.best_ad}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {Object.entries(selectedReport.data.best_ad as Record<string, string>).map(([key, value]) => (
+                          <div key={key} className="p-2 rounded bg-background/50">
+                            <p className="text-xs text-muted-foreground">{formatObjectiveLabel(key)}</p>
+                            <p className="font-medium text-sm">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
