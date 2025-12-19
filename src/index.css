@@ -23,16 +23,16 @@
     --primary-foreground: 25 85% 18%;
 
     /* Secondary - Light blue */
-    --secondary: 214 95% 93%;
-    --secondary-foreground: 217 91% 35%;
+    --secondary: 21 90% 48%;
+    --secondary-foreground: 25 85% 18%;
 
     /* Muted */
     --muted: 220 15% 94%;
     --muted-foreground: 220 10% 45%;
 
     /* Accent - Teal */
-    --accent: 172 66% 50%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 21 90% 48%;
+    --accent-foreground: 25 85% 18%;
 
     /* Destructive */
     --destructive: 0 84% 60%;
