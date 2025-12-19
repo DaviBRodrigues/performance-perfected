@@ -198,7 +198,8 @@ export default function Scheduler() {
       };
 
       let whatsappText = `📊 *RELATÓRIO SEMANAL - ${schedule.client.name.toUpperCase()}*\n`;
-      whatsappText += `📅 Período: ${formatDatePt(startDate)} a ${formatDatePt(endDate)}\n\n`;
+      whatsappText += `📅 Período: ${formatDatePt(startDate)} a ${formatDatePt(endDate)}\n`;
+      whatsappText += `👤 Cliente: ${schedule.client.name}\n\n`;
       whatsappText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
 
       (metricsToShow as Array<{key: string; label: string}>).forEach((metric) => {
