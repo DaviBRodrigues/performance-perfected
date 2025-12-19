@@ -194,7 +194,8 @@ export default function Reports() {
     ];
 
     let text = `📊 *RELATÓRIO SEMANAL - ${(report.client?.name || 'N/A').toUpperCase()}*\n`;
-    text += `📅 Período: ${new Date(report.start_date).toLocaleDateString('pt-BR')} a ${new Date(report.end_date).toLocaleDateString('pt-BR')}\n\n`;
+    text += `📅 Período: ${new Date(report.start_date).toLocaleDateString('pt-BR')} a ${new Date(report.end_date).toLocaleDateString('pt-BR')}\n`;
+    text += `👤 Cliente: ${report.client?.name || 'N/A'}\n\n`;
     text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
 
     metricsToShow.forEach(metric => {
