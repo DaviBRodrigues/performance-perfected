@@ -78,8 +78,10 @@ export interface CampaignData {
   link_clicks?: number;
   ctr?: number;
   messages_started?: number;
+  cost_per_message?: number;
   conversions?: number;
   purchases?: number;
+  cost_per_purchase?: number;
   best_ad?: string;
 }
 

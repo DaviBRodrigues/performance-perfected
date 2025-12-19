@@ -411,8 +411,14 @@ export default function Reports() {
                             {campaign.link_clicks !== undefined && <div><span className="text-muted-foreground">Cliques:</span> {campaign.link_clicks.toLocaleString('pt-BR')}</div>}
                             {campaign.ctr !== undefined && <div><span className="text-muted-foreground">CTR:</span> {campaign.ctr.toFixed(2)}%</div>}
                             {campaign.messages_started !== undefined && <div><span className="text-muted-foreground">Mensagens:</span> {campaign.messages_started}</div>}
+                            {campaign.messages_started !== undefined && campaign.messages_started > 0 && campaign.cost_per_message !== undefined && (
+                              <div><span className="text-muted-foreground">Custo/Mensagem:</span> R$ {campaign.cost_per_message.toFixed(2)}</div>
+                            )}
                             {campaign.conversions !== undefined && <div><span className="text-muted-foreground">Conversões:</span> {campaign.conversions}</div>}
                             {campaign.purchases !== undefined && <div><span className="text-muted-foreground">Compras:</span> {campaign.purchases}</div>}
+                            {campaign.purchases !== undefined && campaign.purchases > 0 && campaign.cost_per_purchase !== undefined && (
+                              <div><span className="text-muted-foreground">Custo/Compra:</span> R$ {campaign.cost_per_purchase.toFixed(2)}</div>
+                            )}
                           </div>
                         </div>
                       ))}
