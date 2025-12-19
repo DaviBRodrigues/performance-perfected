@@ -65,7 +65,8 @@ export interface ReportData {
   checkouts_initiated?: number;
   instagram_visits?: number;
   total_spend?: number;
-  best_ad?: string;
+  best_ad?: string | Record<string, string>;
+  best_ad_scope?: 'all' | 'by_campaign' | 'by_objective';
   campaigns?: CampaignData[];
 }
 
