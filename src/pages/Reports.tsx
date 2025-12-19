@@ -278,18 +278,19 @@ export default function Reports() {
 
               <div className="space-y-6">
                 {/* Métricas principais */}
-                <div>
+              <div>
                   <h3 className="font-semibold mb-3 flex items-center gap-2">
                     <BarChart3 className="w-4 h-4" />
                     Métricas do Período
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
-                    {Object.entries(selectedReport.data).map(([key, value]) => {
-                      if (key === 'campaigns' || key === 'best_ad') return null;
+                    {(selectedReport.report_format?.metrics || []).map((metric) => {
+                      const value = selectedReport.data[metric.key as keyof typeof selectedReport.data];
+                      if (value === undefined || metric.key === 'campaigns' || metric.key === 'best_ad') return null;
                       return (
-                        <div key={key} className="p-3 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">{getMetricLabel(key)}</p>
-                          <p className="text-lg font-semibold">{formatMetricValue(key, value as number)}</p>
+                        <div key={metric.key} className="p-3 rounded-lg bg-muted/50">
+                          <p className="text-xs text-muted-foreground">{metric.label}</p>
+                          <p className="text-lg font-semibold">{formatMetricValue(metric.key, value as number)}</p>
                         </div>
                       );
                     })}
