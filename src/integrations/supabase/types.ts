@@ -153,6 +153,7 @@ export type Database = {
           id: string
           is_active: boolean
           last_run_at: string | null
+          report_format_id: string | null
           run_time: string
           timezone: string
           updated_at: string
@@ -166,6 +167,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_run_at?: string | null
+          report_format_id?: string | null
           run_time: string
           timezone?: string
           updated_at?: string
@@ -179,6 +181,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_run_at?: string | null
+          report_format_id?: string | null
           run_time?: string
           timezone?: string
           updated_at?: string
@@ -191,6 +194,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: true
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_reports_report_format_id_fkey"
+            columns: ["report_format_id"]
+            isOneToOne: false
+            referencedRelation: "report_formats"
             referencedColumns: ["id"]
           },
         ]

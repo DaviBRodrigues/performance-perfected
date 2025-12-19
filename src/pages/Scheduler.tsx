@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { Layout, PageHeader } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
+import { useReportFormats } from '@/hooks/useReportFormats';
 import { useScheduledReports } from '@/hooks/useScheduledReports';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil, Trash2, Loader2, Calendar, Clock, Send } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Calendar, Clock, Send, FileText } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
   { value: '0', label: 'Domingo' },
@@ -36,6 +37,7 @@ const MINUTES = Array.from({ length: 60 }, (_, i) => ({
 export default function Scheduler() {
   const { user, loading: authLoading } = useAuth();
   const { clients } = useClients();
+  const { formats } = useReportFormats();
   const { scheduledReports, isLoading, createScheduledReport, updateScheduledReport, deleteScheduledReport } = useScheduledReports();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
@@ -44,6 +46,7 @@ export default function Scheduler() {
     webhook_url: 'https://hook.us2.make.com/ubpb53m819d72abao2kcd3bluqj6ffal',
     day_of_week: '1',
     run_time: '09:00',
+    report_format_id: '',
     is_active: true,
   });
 
@@ -66,6 +69,7 @@ export default function Scheduler() {
       day_of_week: parseInt(formData.day_of_week),
       run_time: formData.run_time,
       timezone: 'America/Sao_Paulo',
+      report_format_id: formData.report_format_id || null,
       is_active: formData.is_active,
     };
 
@@ -86,6 +90,7 @@ export default function Scheduler() {
       webhook_url: 'https://hook.us2.make.com/ubpb53m819d72abao2kcd3bluqj6ffal',
       day_of_week: '1',
       run_time: '09:00',
+      report_format_id: '',
       is_active: true,
     });
   };
@@ -97,6 +102,7 @@ export default function Scheduler() {
       webhook_url: schedule.webhook_url,
       day_of_week: String(schedule.day_of_week),
       run_time: schedule.run_time,
+      report_format_id: schedule.report_format_id || '',
       is_active: schedule.is_active,
     });
     setIsDialogOpen(true);
@@ -158,6 +164,25 @@ export default function Scheduler() {
                     {availableClients.map(client => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Formato de Relatório</Label>
+                <Select 
+                  value={formData.report_format_id} 
+                  onValueChange={v => setFormData({...formData, report_format_id: v})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um formato" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formats.map(format => (
+                      <SelectItem key={format.id} value={format.id}>
+                        {format.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -306,6 +331,10 @@ export default function Scheduler() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Send className="w-4 h-4" />
                   <span className="truncate text-xs">{schedule.webhook_url.slice(0, 40)}...</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="w-4 h-4" />
+                  <span>Formato: {schedule.report_format?.name || 'Padrão'}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Última execução: {formatLastRun(schedule.last_run_at)}

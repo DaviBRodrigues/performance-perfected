@@ -13,12 +13,17 @@ export interface ScheduledReport {
   timezone: string;
   is_active: boolean;
   last_run_at: string | null;
+  report_format_id: string | null;
   created_at: string;
   updated_at: string;
   client?: {
     id: string;
     name: string;
     account_id: string;
+  };
+  report_format?: {
+    id: string;
+    name: string;
   };
 }
 
@@ -34,7 +39,7 @@ export function useScheduledReports() {
       
       const { data, error } = await supabase
         .from('scheduled_reports')
-        .select('*, client:clients(id, name, account_id)')
+        .select('*, client:clients(id, name, account_id), report_format:report_formats(id, name)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
@@ -72,7 +77,7 @@ export function useScheduledReports() {
 
   const updateScheduledReport = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ScheduledReport> & { id: string }) => {
-      const { client, ...cleanUpdates } = updates;
+      const { client, report_format, ...cleanUpdates } = updates;
       const { data, error } = await supabase
         .from('scheduled_reports')
         .update(cleanUpdates)
