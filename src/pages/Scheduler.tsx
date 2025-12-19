@@ -382,7 +382,7 @@ export default function Scheduler() {
               </div>
 
               <div>
-                <Label>Horário (UTC)</Label>
+                <Label>Horário (Brasil)</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <Select 
                     value={formData.run_time.split(':')[0]} 
@@ -489,7 +489,7 @@ export default function Scheduler() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4" />
-                  <span>{schedule.run_time} (UTC)</span>
+                  <span>{schedule.run_time} (Brasil)</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Send className="w-4 h-4" />
