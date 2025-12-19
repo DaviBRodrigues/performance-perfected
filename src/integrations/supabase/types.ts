@@ -145,6 +145,56 @@ export type Database = {
           },
         ]
       }
+      scheduled_reports: {
+        Row: {
+          client_id: string
+          created_at: string
+          day_of_week: number
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          run_time: string
+          timezone: string
+          updated_at: string
+          user_id: string
+          webhook_url: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          day_of_week: number
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          run_time: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          webhook_url: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          run_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           access_token: string | null
