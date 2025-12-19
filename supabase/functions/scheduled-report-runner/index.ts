@@ -10,55 +10,96 @@ const corsHeaders = {
 const API_VERSION = 'v23.0';
 const URL_BASE = `https://graph.facebook.com/${API_VERSION}`;
 
-// Get the previous week's Monday and Sunday
-function getPreviousWeekRange(timezone: string): { startDate: string; endDate: string } {
+// Timezone helpers (use schedule.timezone, e.g. America/Sao_Paulo)
+const WEEKDAY_MAP: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+function getNowPartsInTimeZone(timezone: string) {
   const now = new Date();
-  
-  // Get current day of week (0 = Sunday, 1 = Monday, etc.)
-  const currentDay = now.getDay();
-  
-  // Calculate days to go back to reach last Monday
-  // If today is Sunday (0), go back 6 days. If Monday (1), go back 7 days, etc.
-  const daysToLastMonday = currentDay === 0 ? 6 : currentDay + 6;
-  
-  const lastMonday = new Date(now);
-  lastMonday.setDate(now.getDate() - daysToLastMonday);
-  lastMonday.setHours(0, 0, 0, 0);
-  
-  const lastSunday = new Date(lastMonday);
-  lastSunday.setDate(lastMonday.getDate() + 6);
-  lastSunday.setHours(23, 59, 59, 999);
-  
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-  
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value;
+
+  const weekdayLabel = get('weekday') || 'Sun';
+  const weekday = WEEKDAY_MAP[weekdayLabel] ?? 0;
+
   return {
-    startDate: formatDate(lastMonday),
-    endDate: formatDate(lastSunday),
+    weekday,
+    year: Number(get('year')),
+    month: Number(get('month')),
+    day: Number(get('day')),
+    hour: Number(get('hour')),
+    minute: Number(get('minute')),
   };
 }
 
-// Check if current time matches the scheduled time
+// Get the previous week's Monday and Sunday (based on the provided timezone)
+function getPreviousWeekRange(timezone: string): { startDate: string; endDate: string } {
+  const nowParts = getNowPartsInTimeZone(timezone);
+
+  // Anchor at 12:00 UTC of the timezone's "today" date to avoid DST edge cases.
+  const anchor = new Date(Date.UTC(nowParts.year, nowParts.month - 1, nowParts.day, 12, 0, 0));
+
+  // nowParts.weekday uses 0=Sun..6=Sat (same as JS Date.getDay)
+  const daysToLastMonday = nowParts.weekday === 0 ? 6 : nowParts.weekday + 6;
+
+  const lastMonday = new Date(anchor);
+  lastMonday.setUTCDate(anchor.getUTCDate() - daysToLastMonday);
+
+  const lastSunday = new Date(lastMonday);
+  lastSunday.setUTCDate(lastMonday.getUTCDate() + 6);
+
+  const formatUtcDate = (date: Date) => {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    startDate: formatUtcDate(lastMonday),
+    endDate: formatUtcDate(lastSunday),
+  };
+}
+
+function wasRecentlyRun(lastRunAt: string | null, minutes: number): boolean {
+  if (!lastRunAt) return false;
+  const diffMinutes = (Date.now() - new Date(lastRunAt).getTime()) / 1000 / 60;
+  return diffMinutes >= 0 && diffMinutes < minutes;
+}
+
+// Check if current time matches the scheduled time (in the provided timezone)
 function shouldRunNow(scheduledTime: string, dayOfWeek: number, timezone: string): boolean {
-  const now = new Date();
-  
-  // Get current day of week (0 = Sunday, 6 = Saturday)
-  const currentDay = now.getDay();
-  if (currentDay !== dayOfWeek) return false;
-  
-  // Parse scheduled time (HH:MM)
-  const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map(Number);
-  const currentHour = now.getUTCHours();
-  const currentMinute = now.getUTCMinutes();
-  
+  const nowParts = getNowPartsInTimeZone(timezone);
+
+  // Day-of-week check in the schedule timezone
+  if (nowParts.weekday !== dayOfWeek) return false;
+
+  // Parse scheduled time (HH:MM or HH:MM:SS)
+  const [scheduledHourStr, scheduledMinuteStr] = String(scheduledTime).split(':');
+  const scheduledHour = Number(scheduledHourStr || 0);
+  const scheduledMinute = Number(scheduledMinuteStr || 0);
+
   // Allow a 5-minute window for execution
   const scheduledTotalMinutes = scheduledHour * 60 + scheduledMinute;
-  const currentTotalMinutes = currentHour * 60 + currentMinute;
-  
+  const currentTotalMinutes = nowParts.hour * 60 + nowParts.minute;
+
   return Math.abs(currentTotalMinutes - scheduledTotalMinutes) <= 5;
 }
 
@@ -137,10 +178,18 @@ serve(async (req) => {
     for (const schedule of scheduledReports || []) {
       try {
         const runTimeStr = schedule.run_time as string;
+
+        if (wasRecentlyRun(schedule.last_run_at, 30)) {
+          console.log(`Skipping schedule ${schedule.id} - already ran recently (${schedule.last_run_at})`);
+          continue;
+        }
+
         const shouldRun = shouldRunNow(runTimeStr, schedule.day_of_week, schedule.timezone);
 
         if (!shouldRun) {
-          console.log(`Skipping schedule ${schedule.id} - not time yet (day: ${schedule.day_of_week}, time: ${runTimeStr})`);
+          console.log(
+            `Skipping schedule ${schedule.id} - not time yet (tz: ${schedule.timezone}, day: ${schedule.day_of_week}, time: ${runTimeStr})`
+          );
           continue;
         }
 
