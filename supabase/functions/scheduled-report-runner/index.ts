@@ -62,6 +62,44 @@ function shouldRunNow(scheduledTime: string, dayOfWeek: number, timezone: string
   return Math.abs(currentTotalMinutes - scheduledTotalMinutes) <= 5;
 }
 
+// Format metric value for display
+function formatMetricValue(key: string, value: number | string | undefined): string {
+  if (value === undefined || value === null) return '-';
+  if (typeof value === 'string') return value;
+  
+  switch (key) {
+    case 'total_spend':
+    case 'cost_per_message':
+    case 'cost_per_conversion':
+      return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    case 'ctr_link_click':
+      return `${value.toFixed(2)}%`;
+    case 'reach':
+    case 'impressions':
+    case 'link_clicks':
+    case 'messages_started':
+    case 'conversions':
+    case 'purchases':
+    case 'cart_additions':
+    case 'checkouts_initiated':
+    case 'instagram_visits':
+      return value.toLocaleString('pt-BR');
+    default:
+      return String(value);
+  }
+}
+
+// Default metrics to show if no format is selected
+const DEFAULT_METRICS = [
+  { key: 'reach', label: '👥 Alcance' },
+  { key: 'impressions', label: '👁️ Impressões' },
+  { key: 'link_clicks', label: '🔗 Cliques no Link' },
+  { key: 'messages_started', label: '💬 Mensagens Iniciadas' },
+  { key: 'cost_per_message', label: '💰 Custo por Mensagem' },
+  { key: 'instagram_visits', label: '📱 Visitas ao Instagram' },
+  { key: 'total_spend', label: '💲 Investimento Total' },
+];
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -74,12 +112,13 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch all active scheduled reports
+    // Fetch all active scheduled reports with client and report_format
     const { data: scheduledReports, error: scheduledError } = await supabase
       .from('scheduled_reports')
       .select(`
         *,
-        client:clients(*)
+        client:clients(*),
+        report_format:report_formats(*)
       `)
       .eq('is_active', true);
 
@@ -143,15 +182,14 @@ serve(async (req) => {
         const timeRange = JSON.stringify({ since: startDate, until: endDate });
         const timeRangeEncoded = encodeURIComponent(timeRange);
 
-        // Fetch Meta Ads data
+        // Fetch Meta Ads data - same fields as meta-ads-report
+        console.log('Fetching campaign insights...');
         const insightsFields = [
           'campaign_name', 'reach', 'impressions', 'spend', 'actions', 
           'cost_per_action_type', 'clicks', 'ctr'
         ].join(',');
 
         const insightsUrl = `${URL_BASE}/${formattedAccountId}/insights?level=campaign&fields=${insightsFields}&time_range=${timeRangeEncoded}&access_token=${accessToken}`;
-        
-        console.log('Fetching campaign insights...');
         const insightsResponse = await fetch(insightsUrl);
         const insightsData = await insightsResponse.json();
 
@@ -167,28 +205,65 @@ serve(async (req) => {
         }
 
         // Get account-level reach
+        console.log('Fetching account reach...');
         const accountReachUrl = `${URL_BASE}/${formattedAccountId}/insights?level=account&fields=reach&time_range=${timeRangeEncoded}&access_token=${accessToken}`;
         const accountReachResponse = await fetch(accountReachUrl);
         const accountReachData = await accountReachResponse.json();
 
+        // Get campaigns objectives
+        console.log('Fetching campaigns objectives...');
+        const campaignsUrl = `${URL_BASE}/${formattedAccountId}/campaigns?fields=id,name,objective&limit=100&access_token=${accessToken}`;
+        const campaignsResponse = await fetch(campaignsUrl);
+        const campaignsData = await campaignsResponse.json();
+
+        // Build campaign objectives map
+        const campaignObjectives: Record<string, string> = {};
+        if (campaignsData.data) {
+          campaignsData.data.forEach((campaign: any) => {
+            campaignObjectives[campaign.name] = campaign.objective;
+          });
+        }
+
         // Get best ad
+        console.log('Fetching ads data...');
         const adsFields = ['ad_name', 'campaign_name', 'spend', 'impressions', 'actions', 'reach'].join(',');
         const adsUrl = `${URL_BASE}/${formattedAccountId}/insights?level=ad&fields=${adsFields}&time_range=${timeRangeEncoded}&limit=100&access_token=${accessToken}`;
         const adsResponse = await fetch(adsUrl);
         const adsData = await adsResponse.json();
 
-        // Process data
+        // Process data - same logic as meta-ads-report
         let totalReach = 0;
         let totalImpressions = 0;
         let totalSpend = 0;
         let totalLinkClicks = 0;
         let totalMessagesStarted = 0;
         let totalInstagramVisits = 0;
+        let totalConversions = 0;
+        let totalPurchases = 0;
+        let totalCartAdditions = 0;
+        let totalCheckoutsInitiated = 0;
+
+        const campaigns: any[] = [];
 
         if (insightsData.data && insightsData.data.length > 0) {
           insightsData.data.forEach((campaign: any) => {
-            totalImpressions += parseInt(campaign.impressions || '0');
-            totalSpend += parseFloat(campaign.spend || '0');
+            const campaignData: any = {
+              name: campaign.campaign_name,
+              objective: campaignObjectives[campaign.campaign_name] || 'UNKNOWN',
+              reach: parseInt(campaign.reach || '0'),
+              impressions: parseInt(campaign.impressions || '0'),
+              spend: parseFloat(campaign.spend || '0'),
+              link_clicks: 0,
+              ctr: parseFloat(campaign.ctr || '0'),
+              messages_started: 0,
+              cost_per_message: null,
+              conversions: 0,
+              purchases: 0,
+              cost_per_purchase: null,
+            };
+
+            totalImpressions += campaignData.impressions;
+            totalSpend += campaignData.spend;
 
             if (campaign.actions) {
               campaign.actions.forEach((action: any) => {
@@ -196,16 +271,42 @@ serve(async (req) => {
                 const actionValue = parseInt(action.value || '0');
 
                 if (actionType === 'link_click') {
+                  campaignData.link_clicks += actionValue;
                   totalLinkClicks += actionValue;
                 }
-                if (actionType.includes('messaging_conversation_started')) {
+                if (actionType.includes('messaging_conversation_started') || actionType === 'onsite_conversion.messaging_conversation_started_7d') {
+                  campaignData.messages_started += actionValue;
                   totalMessagesStarted += actionValue;
                 }
                 if (actionType === 'instagram_profile_visit') {
                   totalInstagramVisits += actionValue;
                 }
+                if (actionType === 'purchase' || actionType === 'omni_purchase') {
+                  campaignData.purchases += actionValue;
+                  totalPurchases += actionValue;
+                }
+                if (actionType === 'add_to_cart' || actionType === 'omni_add_to_cart') {
+                  totalCartAdditions += actionValue;
+                }
+                if (actionType === 'initiate_checkout' || actionType === 'omni_initiated_checkout') {
+                  totalCheckoutsInitiated += actionValue;
+                }
+                if (actionType === 'lead' || actionType === 'onsite_conversion.lead_grouped') {
+                  campaignData.conversions += actionValue;
+                  totalConversions += actionValue;
+                }
               });
             }
+
+            // Calculate cost per action
+            if (campaignData.messages_started > 0) {
+              campaignData.cost_per_message = campaignData.spend / campaignData.messages_started;
+            }
+            if (campaignData.purchases > 0) {
+              campaignData.cost_per_purchase = campaignData.spend / campaignData.purchases;
+            }
+
+            campaigns.push(campaignData);
           });
         }
 
@@ -237,6 +338,84 @@ serve(async (req) => {
         }
 
         const costPerMessage = totalMessagesStarted > 0 ? totalSpend / totalMessagesStarted : null;
+        const costPerConversion = totalConversions > 0 ? totalSpend / totalConversions : null;
+        const ctrLinkClick = totalImpressions > 0 ? (totalLinkClicks / totalImpressions) * 100 : 0;
+
+        // Build report data (same structure as meta-ads-report)
+        const reportData: Record<string, any> = {
+          reach: totalReach || null,
+          impressions: totalImpressions || null,
+          link_clicks: totalLinkClicks || null,
+          ctr_link_click: ctrLinkClick || null,
+          messages_started: totalMessagesStarted || null,
+          cost_per_message: costPerMessage ? parseFloat(costPerMessage.toFixed(2)) : null,
+          conversions: totalConversions || null,
+          cost_per_conversion: costPerConversion ? parseFloat(costPerConversion.toFixed(2)) : null,
+          purchases: totalPurchases || null,
+          cart_additions: totalCartAdditions || null,
+          checkouts_initiated: totalCheckoutsInitiated || null,
+          instagram_visits: totalInstagramVisits || null,
+          total_spend: totalSpend ? parseFloat(totalSpend.toFixed(2)) : null,
+          best_ad: bestAd,
+          campaigns: campaigns,
+        };
+
+        console.log('Report data generated successfully');
+
+        // Get metrics from report format or use defaults
+        const metricsToShow = schedule.report_format?.metrics || DEFAULT_METRICS;
+
+        // Generate WhatsApp text using format metrics (like copyReportText does)
+        const formatDatePt = (dateStr: string) => {
+          const [year, month, day] = dateStr.split('-');
+          return `${day}/${month}/${year}`;
+        };
+
+        let whatsappText = `📊 *RELATÓRIO SEMANAL META ADS*\n`;
+        whatsappText += `📅 Período: ${formatDatePt(startDate)} a ${formatDatePt(endDate)}\n`;
+        whatsappText += `👤 Cliente: ${client.name}\n\n`;
+        whatsappText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        // Add metrics based on format
+        metricsToShow.forEach((metric: any) => {
+          const value = reportData[metric.key];
+          if (value !== undefined && value !== null) {
+            whatsappText += `${metric.label} ${formatMetricValue(metric.key, value)}\n`;
+          }
+        });
+
+        // Add best ad
+        if (reportData.best_ad) {
+          whatsappText += `\n⭐ *Melhor Anúncio:* ${reportData.best_ad}\n`;
+        }
+
+        // Add campaigns section
+        if (campaigns.length > 0) {
+          whatsappText += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+          whatsappText += `📈 *CAMPANHAS*\n\n`;
+
+          campaigns.forEach((campaign, idx) => {
+            whatsappText += `*${idx + 1}. ${campaign.name}*\n`;
+            if (campaign.reach) whatsappText += `   Alcance: ${campaign.reach.toLocaleString('pt-BR')}\n`;
+            if (campaign.impressions) whatsappText += `   Impressões: ${campaign.impressions.toLocaleString('pt-BR')}\n`;
+            if (campaign.spend) whatsappText += `   Investimento: R$ ${campaign.spend.toFixed(2)}\n`;
+            if (campaign.link_clicks) whatsappText += `   Cliques: ${campaign.link_clicks.toLocaleString('pt-BR')}\n`;
+            if (campaign.ctr && campaign.ctr > 0) whatsappText += `   CTR: ${campaign.ctr.toFixed(2)}%\n`;
+            if (campaign.messages_started && campaign.messages_started > 0) {
+              whatsappText += `   Mensagens: ${campaign.messages_started}\n`;
+              if (campaign.cost_per_message) {
+                whatsappText += `   Custo/Mensagem: R$ ${campaign.cost_per_message.toFixed(2)}\n`;
+              }
+            }
+            if (campaign.purchases && campaign.purchases > 0) {
+              whatsappText += `   Compras: ${campaign.purchases}\n`;
+              if (campaign.cost_per_purchase) {
+                whatsappText += `   Custo/Compra: R$ ${campaign.cost_per_purchase.toFixed(2)}\n`;
+              }
+            }
+            whatsappText += '\n';
+          });
+        }
 
         // Build payload
         const payload = {
@@ -246,35 +425,10 @@ serve(async (req) => {
             inicio: startDate,
             fim: endDate,
           },
-          metricas: {
-            alcance: totalReach || null,
-            cliques_no_link: totalLinkClicks || null,
-            mensagens_iniciadas: totalMessagesStarted || null,
-            custo_por_mensagem: costPerMessage ? parseFloat(costPerMessage.toFixed(2)) : null,
-            visitas_instagram: totalInstagramVisits || null,
-            investimento_total: totalSpend ? parseFloat(totalSpend.toFixed(2)) : null,
-          },
-          melhor_anuncio: bestAd,
+          metricas: reportData,
+          format_name: schedule.report_format?.name || 'Padrão',
           gerado_em: new Date().toISOString(),
         };
-
-        // Generate WhatsApp text
-        const formatDate = (dateStr: string) => {
-          const date = new Date(dateStr);
-          return date.toLocaleDateString('pt-BR');
-        };
-
-        let whatsappText = `📊 *RELATÓRIO SEMANAL - ${client.name.toUpperCase()}*\n`;
-        whatsappText += `📅 Período: ${formatDate(startDate)} a ${formatDate(endDate)}\n\n`;
-        whatsappText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-        
-        if (totalReach) whatsappText += `👥 Alcance: ${totalReach.toLocaleString('pt-BR')}\n`;
-        if (totalLinkClicks) whatsappText += `🔗 Cliques no Link: ${totalLinkClicks.toLocaleString('pt-BR')}\n`;
-        if (totalMessagesStarted) whatsappText += `💬 Mensagens Iniciadas: ${totalMessagesStarted}\n`;
-        if (costPerMessage) whatsappText += `💰 Custo por Mensagem: R$ ${costPerMessage.toFixed(2)}\n`;
-        if (totalInstagramVisits) whatsappText += `📱 Visitas ao Instagram: ${totalInstagramVisits}\n`;
-        if (totalSpend) whatsappText += `💲 Investimento Total: R$ ${totalSpend.toFixed(2)}\n`;
-        if (bestAd) whatsappText += `\n⭐ *Melhor Anúncio:* ${bestAd}\n`;
 
         // Send to webhook
         console.log(`Sending report to webhook: ${schedule.webhook_url}`);
