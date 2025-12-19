@@ -173,6 +173,18 @@ export default function Reports() {
     return objectiveLabels[objective] || objective;
   };
 
+  // Helper para verificar se campanha é de mensagem
+  const isMessageCampaign = (objective?: string) => {
+    const messageObjectives = ['OUTCOME_ENGAGEMENT', 'MESSAGES', 'POST_ENGAGEMENT'];
+    return objective && messageObjectives.some(o => objective.includes(o) || objective.includes('ENGAGEMENT'));
+  };
+
+  // Helper para verificar se campanha é de e-commerce/vendas
+  const isEcommerceCampaign = (objective?: string) => {
+    const ecommerceObjectives = ['OUTCOME_SALES', 'CONVERSIONS', 'PRODUCT_CATALOG_SALES'];
+    return objective && ecommerceObjectives.some(o => objective.includes(o) || objective.includes('SALES'));
+  };
+
   const copyReportText = (report: Report) => {
     const format = report.report_format;
     const metricsToShow = format?.metrics || [
@@ -208,10 +220,33 @@ export default function Reports() {
       text += `\n━━━━━━━━━━━━━━━━━━━━\n`;
       text += `📈 *CAMPANHAS*\n\n`;
       report.data.campaigns.forEach((campaign, idx) => {
+        const isMsgCamp = isMessageCampaign(campaign.objective);
+        const isEcomCamp = isEcommerceCampaign(campaign.objective);
+
         text += `*${idx + 1}. ${campaign.name}*\n`;
         if (campaign.reach) text += `   Alcance: ${campaign.reach.toLocaleString('pt-BR')}\n`;
         if (campaign.impressions) text += `   Impressões: ${campaign.impressions.toLocaleString('pt-BR')}\n`;
         if (campaign.spend) text += `   Investimento: R$ ${campaign.spend.toFixed(2)}\n`;
+        if (campaign.link_clicks) text += `   Cliques: ${campaign.link_clicks.toLocaleString('pt-BR')}\n`;
+        if (campaign.ctr !== undefined && campaign.ctr > 0) text += `   CTR: ${campaign.ctr.toFixed(2)}%\n`;
+        
+        // Métricas de mensagem - mostrar apenas se for campanha de mensagem ou tiver mensagens
+        if (isMsgCamp || (campaign.messages_started && campaign.messages_started > 0)) {
+          if (campaign.messages_started) text += `   Mensagens: ${campaign.messages_started}\n`;
+          if (campaign.cost_per_message && campaign.messages_started && campaign.messages_started > 0) {
+            text += `   Custo/Mensagem: R$ ${campaign.cost_per_message.toFixed(2)}\n`;
+          }
+        }
+
+        // Métricas de e-commerce - mostrar apenas se for campanha de vendas ou tiver compras
+        if (isEcomCamp || (campaign.purchases && campaign.purchases > 0)) {
+          if (campaign.conversions) text += `   Conversões: ${campaign.conversions}\n`;
+          if (campaign.purchases) text += `   Compras: ${campaign.purchases}\n`;
+          if (campaign.cost_per_purchase && campaign.purchases && campaign.purchases > 0) {
+            text += `   Custo/Compra: R$ ${campaign.cost_per_purchase.toFixed(2)}\n`;
+          }
+        }
+
         text += '\n';
       });
     }
