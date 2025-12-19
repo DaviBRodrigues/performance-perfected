@@ -14,10 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Plus, Trash2, Loader2, BarChart3, AlertCircle, Eye, Copy, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Loader2, BarChart3, AlertCircle, Eye, Copy } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Reports() {
   const { user, loading: authLoading } = useAuth();
@@ -27,6 +28,7 @@ export default function Reports() {
   const { hasAccessToken } = useSettings();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [formData, setFormData] = useState({ client_id: '', report_format_id: '', start_date: '', end_date: '' });
 
@@ -35,43 +37,72 @@ export default function Reports() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const client = clients.find(c => c.id === formData.client_id);
-    const format = formats.find(f => f.id === formData.report_format_id);
     
-    // Dados simulados para demonstração
-    const mockData = {
-      reach: Math.floor(Math.random() * 50000) + 10000,
-      impressions: Math.floor(Math.random() * 100000) + 20000,
-      link_clicks: Math.floor(Math.random() * 5000) + 500,
-      ctr_link_click: parseFloat((Math.random() * 5 + 1).toFixed(2)),
-      messages_started: Math.floor(Math.random() * 500) + 50,
-      cost_per_message: parseFloat((Math.random() * 5 + 1).toFixed(2)),
-      conversions: Math.floor(Math.random() * 200) + 20,
-      cost_per_conversion: parseFloat((Math.random() * 50 + 10).toFixed(2)),
-      purchases: Math.floor(Math.random() * 100) + 10,
-      cart_additions: Math.floor(Math.random() * 300) + 50,
-      checkouts_initiated: Math.floor(Math.random() * 150) + 20,
-      instagram_visits: Math.floor(Math.random() * 2000) + 200,
-      total_spend: parseFloat((Math.random() * 5000 + 500).toFixed(2)),
-      best_ad: 'Anúncio Principal - Promoção',
-      campaigns: [
-        { name: 'Campanha Tráfego', reach: 15000, impressions: 30000, spend: 500, link_clicks: 800, ctr: 2.67 },
-        { name: 'Campanha Conversões', reach: 12000, impressions: 25000, spend: 800, link_clicks: 600, ctr: 2.4, conversions: 50 },
-        { name: 'Campanha Mensagens', reach: 8000, impressions: 15000, spend: 300, messages_started: 150 },
-      ]
-    };
+    const client = clients.find(c => c.id === formData.client_id);
+    if (!client) {
+      toast({ title: 'Erro', description: 'Selecione um cliente', variant: 'destructive' });
+      return;
+    }
 
-    await createReport.mutateAsync({
-      client_id: formData.client_id,
-      report_format_id: formData.report_format_id || undefined,
-      title: `Relatório - ${client?.name || 'Cliente'} - ${formData.start_date} a ${formData.end_date}`,
-      start_date: formData.start_date,
-      end_date: formData.end_date,
-      data: mockData,
-      status: 'completed',
-    });
-    setIsDialogOpen(false);
-    setFormData({ client_id: '', report_format_id: '', start_date: '', end_date: '' });
+    setIsGenerating(true);
+
+    try {
+      // Chamar a edge function para buscar dados reais da API do Meta Ads
+      const { data: reportData, error } = await supabase.functions.invoke('meta-ads-report', {
+        body: {
+          accountId: client.account_id,
+          startDate: formData.start_date,
+          endDate: formData.end_date,
+          userId: user.id,
+        },
+      });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        toast({ 
+          title: 'Erro ao buscar dados', 
+          description: error.message || 'Erro ao conectar com a API do Meta Ads',
+          variant: 'destructive' 
+        });
+        setIsGenerating(false);
+        return;
+      }
+
+      if (reportData.error) {
+        toast({ 
+          title: 'Erro da API Meta Ads', 
+          description: reportData.error,
+          variant: 'destructive' 
+        });
+        setIsGenerating(false);
+        return;
+      }
+
+      // Criar o relatório com os dados reais
+      await createReport.mutateAsync({
+        client_id: formData.client_id,
+        report_format_id: formData.report_format_id || undefined,
+        title: `Relatório - ${client.name} - ${formData.start_date} a ${formData.end_date}`,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        data: reportData,
+        status: 'completed',
+      });
+
+      toast({ title: 'Relatório gerado!', description: 'Dados reais obtidos da API do Meta Ads.' });
+      setIsDialogOpen(false);
+      setFormData({ client_id: '', report_format_id: '', start_date: '', end_date: '' });
+
+    } catch (err: any) {
+      console.error('Error generating report:', err);
+      toast({ 
+        title: 'Erro ao gerar relatório', 
+        description: err.message || 'Tente novamente',
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const formatMetricValue = (key: string, value: number | string | undefined) => {
@@ -167,7 +198,7 @@ export default function Reports() {
       <PageHeader title="Relatórios" description="Gere e visualize relatórios Meta Ads">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button disabled={activeClients.length === 0}>
+            <Button disabled={activeClients.length === 0 || !hasAccessToken}>
               <Plus className="w-4 h-4 mr-2" />Novo Relatório
             </Button>
           </DialogTrigger>
@@ -178,7 +209,7 @@ export default function Reports() {
                 <Label>Cliente</Label>
                 <Select value={formData.client_id} onValueChange={v => setFormData({...formData, client_id: v})}>
                   <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
-                  <SelectContent>{activeClients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{activeClients.map(c => <SelectItem key={c.id} value={c.id}>{c.name} (ID: {c.account_id})</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
@@ -192,14 +223,23 @@ export default function Reports() {
                 <div><Label>Data Início</Label><Input type="date" value={formData.start_date} onChange={e => setFormData({...formData, start_date: e.target.value})} required /></div>
                 <div><Label>Data Fim</Label><Input type="date" value={formData.end_date} onChange={e => setFormData({...formData, end_date: e.target.value})} required /></div>
               </div>
-              <Button type="submit" className="w-full" disabled={createReport.isPending || !formData.client_id}>
-                {createReport.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Gerar Relatório
+              <Button type="submit" className="w-full" disabled={isGenerating || !formData.client_id}>
+                {isGenerating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isGenerating ? 'Buscando dados...' : 'Gerar Relatório'}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </PageHeader>
+
+      {!hasAccessToken && (
+        <Alert className="mb-6">
+          <AlertCircle className="w-4 h-4" />
+          <AlertDescription>
+            Configure seu Access Token em <Link to="/settings" className="text-primary underline">Configurações</Link> para gerar relatórios com dados reais.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {activeClients.length === 0 && (
         <Alert className="mb-6">
@@ -278,7 +318,7 @@ export default function Reports() {
 
               <div className="space-y-6">
                 {/* Métricas principais */}
-              <div>
+                <div>
                   <h3 className="font-semibold mb-3 flex items-center gap-2">
                     <BarChart3 className="w-4 h-4" />
                     Métricas do Período
@@ -314,13 +354,14 @@ export default function Reports() {
                         <div key={idx} className="p-4 rounded-lg border bg-card">
                           <p className="font-medium mb-2">{campaign.name}</p>
                           <div className="grid grid-cols-2 gap-2 text-sm">
-                            {campaign.reach && <div><span className="text-muted-foreground">Alcance:</span> {campaign.reach.toLocaleString('pt-BR')}</div>}
-                            {campaign.impressions && <div><span className="text-muted-foreground">Impressões:</span> {campaign.impressions.toLocaleString('pt-BR')}</div>}
-                            {campaign.spend && <div><span className="text-muted-foreground">Investimento:</span> R$ {campaign.spend.toFixed(2)}</div>}
-                            {campaign.link_clicks && <div><span className="text-muted-foreground">Cliques:</span> {campaign.link_clicks.toLocaleString('pt-BR')}</div>}
-                            {campaign.ctr && <div><span className="text-muted-foreground">CTR:</span> {campaign.ctr.toFixed(2)}%</div>}
-                            {campaign.messages_started && <div><span className="text-muted-foreground">Mensagens:</span> {campaign.messages_started}</div>}
-                            {campaign.conversions && <div><span className="text-muted-foreground">Conversões:</span> {campaign.conversions}</div>}
+                            {campaign.reach !== undefined && <div><span className="text-muted-foreground">Alcance:</span> {campaign.reach.toLocaleString('pt-BR')}</div>}
+                            {campaign.impressions !== undefined && <div><span className="text-muted-foreground">Impressões:</span> {campaign.impressions.toLocaleString('pt-BR')}</div>}
+                            {campaign.spend !== undefined && <div><span className="text-muted-foreground">Investimento:</span> R$ {campaign.spend.toFixed(2)}</div>}
+                            {campaign.link_clicks !== undefined && <div><span className="text-muted-foreground">Cliques:</span> {campaign.link_clicks.toLocaleString('pt-BR')}</div>}
+                            {campaign.ctr !== undefined && <div><span className="text-muted-foreground">CTR:</span> {campaign.ctr.toFixed(2)}%</div>}
+                            {campaign.messages_started !== undefined && <div><span className="text-muted-foreground">Mensagens:</span> {campaign.messages_started}</div>}
+                            {campaign.conversions !== undefined && <div><span className="text-muted-foreground">Conversões:</span> {campaign.conversions}</div>}
+                            {campaign.purchases !== undefined && <div><span className="text-muted-foreground">Compras:</span> {campaign.purchases}</div>}
                           </div>
                         </div>
                       ))}
