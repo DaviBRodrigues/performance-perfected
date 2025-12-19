@@ -371,9 +371,8 @@ serve(async (req) => {
           return `${day}/${month}/${year}`;
         };
 
-        let whatsappText = `📊 *RELATÓRIO SEMANAL META ADS*\n`;
-        whatsappText += `📅 Período: ${formatDatePt(startDate)} a ${formatDatePt(endDate)}\n`;
-        whatsappText += `👤 Cliente: ${client.name}\n\n`;
+        let whatsappText = `📊 *RELATÓRIO SEMANAL - ${client.name.toUpperCase()}*\n`;
+        whatsappText += `📅 Período: ${formatDatePt(startDate)} a ${formatDatePt(endDate)}\n\n`;
         whatsappText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
 
         // Add metrics based on format
