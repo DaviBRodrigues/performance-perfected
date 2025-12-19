@@ -300,6 +300,26 @@ serve(async (req) => {
 
     console.log('Report data generated successfully');
 
+    // Send report data to Make webhook
+    const webhookUrl = 'https://hook.us2.make.com/ubpb53m819d72abao2kcd3bluqj6ffal';
+    try {
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...reportData,
+          account_id: accountId,
+          start_date: startDate,
+          end_date: endDate,
+          generated_at: new Date().toISOString(),
+        }),
+      });
+      console.log('Report data sent to webhook successfully');
+    } catch (webhookError) {
+      console.error('Error sending to webhook:', webhookError);
+      // Don't fail the request if webhook fails
+    }
+
     return new Response(JSON.stringify(reportData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
