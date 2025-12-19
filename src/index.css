@@ -4,6 +4,8 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
+@import url("https://fonts.googleapis.com/css2?family=Inter&display=swap");
+
 @layer base {
   :root {
     /* Core colors - Meta-inspired blues with modern twist */
@@ -17,8 +19,8 @@
     --popover-foreground: 220 30% 10%;
 
     /* Primary - Deep blue */
-    --primary: 217 91% 50%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 21 90.2439% 48.2353%;
+    --primary-foreground: 25 85% 18%;
 
     /* Secondary - Light blue */
     --secondary: 214 95% 93%;
@@ -182,7 +184,7 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
