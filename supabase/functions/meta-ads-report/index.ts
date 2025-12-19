@@ -300,24 +300,118 @@ serve(async (req) => {
 
     console.log('Report data generated successfully');
 
-    // Send report data to Make webhook
+    // Helper functions for formatting
+    const isMessageCampaign = (objective?: string) => {
+      if (!objective) return false;
+      return ['OUTCOME_ENGAGEMENT', 'MESSAGES'].some(o => objective.toUpperCase().includes(o));
+    };
+
+    const isEcommerceCampaign = (objective?: string) => {
+      if (!objective) return false;
+      return ['OUTCOME_SALES', 'CONVERSIONS', 'PRODUCT_CATALOG_SALES'].some(o => objective.toUpperCase().includes(o));
+    };
+
+    const formatObjectiveLabel = (objective: string): string => {
+      const labels: Record<string, string> = {
+        'OUTCOME_ENGAGEMENT': 'Engajamento',
+        'OUTCOME_SALES': 'Vendas',
+        'OUTCOME_LEADS': 'Leads',
+        'OUTCOME_AWARENESS': 'Reconhecimento',
+        'OUTCOME_TRAFFIC': 'Tráfego',
+        'MESSAGES': 'Mensagens',
+        'CONVERSIONS': 'Conversões',
+        'LINK_CLICKS': 'Cliques no Link',
+      };
+      return labels[objective] || objective;
+    };
+
+    // Generate formatted WhatsApp text
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('pt-BR');
+    };
+
+    let whatsappText = `📊 *RELATÓRIO SEMANAL META ADS*\n`;
+    whatsappText += `📅 Período: ${formatDate(startDate)} a ${formatDate(endDate)}\n\n`;
+    whatsappText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    // Main metrics
+    whatsappText += `👥 Alcance: ${totalReach.toLocaleString('pt-BR')}\n`;
+    whatsappText += `👁️ Impressões: ${totalImpressions.toLocaleString('pt-BR')}\n`;
+    whatsappText += `💲 Investimento Total: R$ ${totalSpend.toFixed(2)}\n`;
+    if (totalLinkClicks > 0) whatsappText += `🔗 Cliques no Link: ${totalLinkClicks.toLocaleString('pt-BR')}\n`;
+    if (ctrLinkClick > 0) whatsappText += `📈 CTR: ${ctrLinkClick.toFixed(2)}%\n`;
+    if (totalMessagesStarted > 0) whatsappText += `💬 Mensagens Iniciadas: ${totalMessagesStarted}\n`;
+    if (costPerMessage > 0) whatsappText += `💰 Custo por Mensagem: R$ ${costPerMessage.toFixed(2)}\n`;
+    if (totalConversions > 0) whatsappText += `🎯 Conversões: ${totalConversions}\n`;
+    if (costPerConversion > 0) whatsappText += `💰 Custo por Conversão: R$ ${costPerConversion.toFixed(2)}\n`;
+    if (totalPurchases > 0) whatsappText += `🛒 Compras: ${totalPurchases}\n`;
+    if (totalCartAdditions > 0) whatsappText += `🛍️ Adições ao Carrinho: ${totalCartAdditions}\n`;
+    if (totalCheckoutsInitiated > 0) whatsappText += `📦 Checkouts Iniciados: ${totalCheckoutsInitiated}\n`;
+    if (totalInstagramVisits > 0) whatsappText += `📱 Visitas ao Instagram: ${totalInstagramVisits}\n`;
+
+    // Best ads
+    if (bestAdResult) {
+      if (typeof bestAdResult === 'string') {
+        whatsappText += `\n⭐ *Melhor Anúncio:* ${bestAdResult}\n`;
+      } else {
+        whatsappText += `\n⭐ *Melhores Anúncios:*\n`;
+        Object.entries(bestAdResult as Record<string, string>).forEach(([key, value]) => {
+          whatsappText += `• ${formatObjectiveLabel(key)}: ${value}\n`;
+        });
+      }
+    }
+
+    // Campaigns
+    if (campaigns.length > 0) {
+      whatsappText += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+      whatsappText += `📈 *CAMPANHAS*\n\n`;
+      campaigns.forEach((campaign: any, idx: number) => {
+        const isMsgCamp = isMessageCampaign(campaign.objective);
+        const isEcomCamp = isEcommerceCampaign(campaign.objective);
+
+        whatsappText += `*${idx + 1}. ${campaign.name}*\n`;
+        if (campaign.reach) whatsappText += `   Alcance: ${campaign.reach.toLocaleString('pt-BR')}\n`;
+        if (campaign.impressions) whatsappText += `   Impressões: ${campaign.impressions.toLocaleString('pt-BR')}\n`;
+        if (campaign.spend) whatsappText += `   Investimento: R$ ${campaign.spend.toFixed(2)}\n`;
+        if (campaign.link_clicks) whatsappText += `   Cliques: ${campaign.link_clicks.toLocaleString('pt-BR')}\n`;
+        if (campaign.ctr !== undefined && campaign.ctr > 0) whatsappText += `   CTR: ${campaign.ctr.toFixed(2)}%\n`;
+        
+        // Message metrics
+        if (isMsgCamp || (campaign.messages_started && campaign.messages_started > 0)) {
+          if (campaign.messages_started) whatsappText += `   Mensagens: ${campaign.messages_started}\n`;
+          if (campaign.cost_per_message && campaign.messages_started > 0) {
+            whatsappText += `   Custo/Mensagem: R$ ${campaign.cost_per_message.toFixed(2)}\n`;
+          }
+        }
+
+        // E-commerce metrics
+        if (isEcomCamp || (campaign.purchases && campaign.purchases > 0)) {
+          if (campaign.conversions) whatsappText += `   Conversões: ${campaign.conversions}\n`;
+          if (campaign.purchases) whatsappText += `   Compras: ${campaign.purchases}\n`;
+          if (campaign.cost_per_purchase && campaign.purchases > 0) {
+            whatsappText += `   Custo/Compra: R$ ${campaign.cost_per_purchase.toFixed(2)}\n`;
+          }
+        }
+
+        whatsappText += '\n';
+      });
+    }
+
+    // Send formatted text to Make webhook
     const webhookUrl = 'https://hook.us2.make.com/ubpb53m819d72abao2kcd3bluqj6ffal';
     try {
       await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...reportData,
-          account_id: accountId,
-          start_date: startDate,
-          end_date: endDate,
+          whatsapp_text: whatsappText,
           generated_at: new Date().toISOString(),
         }),
       });
       console.log('Report data sent to webhook successfully');
     } catch (webhookError) {
       console.error('Error sending to webhook:', webhookError);
-      // Don't fail the request if webhook fails
     }
 
     return new Response(JSON.stringify(reportData), {
