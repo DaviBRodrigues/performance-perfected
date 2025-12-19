@@ -9,6 +9,7 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +20,7 @@ const navItems = [
   { icon: Users, label: 'Clientes', href: '/clients' },
   { icon: FileText, label: 'Formatos', href: '/formats' },
   { icon: BarChart3, label: 'Relatórios', href: '/reports' },
+  { icon: Calendar, label: 'Agendamentos', href: '/scheduler' },
   { icon: Settings, label: 'Configurações', href: '/settings' },
 ];
 

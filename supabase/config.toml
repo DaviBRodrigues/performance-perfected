@@ -1,1 +1,7 @@
 project_id = "amyxtfnkhrjmptqzneyx"
+
+[functions.meta-ads-report]
+verify_jwt = false
+
+[functions.scheduled-report-runner]
+verify_jwt = false
