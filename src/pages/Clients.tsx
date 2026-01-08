@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Layout, PageHeader } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClients } from '@/hooks/useClients';
@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil, Trash2, Loader2, Users, Search, SlidersHorizontal } from 'lucide-react';
+import { Plus, Loader2, Users, Search, SlidersHorizontal, ChevronRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -61,13 +61,15 @@ interface ClientCardProps {
   };
   reportCount: number;
   lastReportAt: Date | null;
-  onEdit: () => void;
-  onDelete: () => void;
+  onClick: () => void;
 }
 
-function ClientCard({ client, reportCount, lastReportAt, onEdit, onDelete }: ClientCardProps) {
+function ClientCard({ client, reportCount, lastReportAt, onClick }: ClientCardProps) {
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 border-border/50 hover:border-primary/30 animate-scale-in">
+    <Card 
+      className="group hover:shadow-lg transition-all duration-300 border-border/50 hover:border-primary/30 animate-scale-in cursor-pointer"
+      onClick={onClick}
+    >
       <CardContent className="p-6">
         <div className="flex items-start gap-4">
           {/* Avatar */}
@@ -90,15 +92,8 @@ function ClientCard({ client, reportCount, lastReportAt, onEdit, onDelete }: Cli
                 </div>
               </div>
               
-              {/* Actions */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
-                  <Pencil className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+              {/* Arrow indicator */}
+              <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             
             {/* Stats */}
@@ -124,12 +119,12 @@ function ClientCard({ client, reportCount, lastReportAt, onEdit, onDelete }: Cli
 }
 
 export default function Clients() {
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { clients, isLoading, createClient, updateClient, deleteClient } = useClients();
   const { reports } = useReports();
   const { formats } = useReportFormats();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', account_id: '', report_format_id: '', is_active: true });
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'recent'>('recent');
@@ -184,24 +179,12 @@ export default function Clients() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingClient) {
-      await updateClient.mutateAsync({ id: editingClient, ...formData, report_format_id: formData.report_format_id || null });
-    } else {
-      await createClient.mutateAsync({ ...formData, report_format_id: formData.report_format_id || null });
-    }
+    await createClient.mutateAsync({ ...formData, report_format_id: formData.report_format_id || null });
     setIsDialogOpen(false);
-    setEditingClient(null);
     setFormData({ name: '', account_id: '', report_format_id: '', is_active: true });
   };
 
-  const openEdit = (client: typeof clients[0]) => {
-    setEditingClient(client.id);
-    setFormData({ name: client.name, account_id: client.account_id, report_format_id: client.report_format_id || '', is_active: client.is_active ?? true });
-    setIsDialogOpen(true);
-  };
-
   const resetForm = () => {
-    setEditingClient(null);
     setFormData({ name: '', account_id: '', report_format_id: '', is_active: true });
   };
 
@@ -217,7 +200,7 @@ export default function Clients() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{editingClient ? 'Editar' : 'Novo'} Cliente</DialogTitle>
+              <DialogTitle>Novo Cliente</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -259,8 +242,8 @@ export default function Clients() {
                 />
                 <Label>Cliente Ativo</Label>
               </div>
-              <Button type="submit" className="w-full" disabled={createClient.isPending || updateClient.isPending}>
-                {(createClient.isPending || updateClient.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <Button type="submit" className="w-full" disabled={createClient.isPending}>
+                {createClient.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Salvar
               </Button>
             </form>
@@ -326,8 +309,7 @@ export default function Clients() {
               client={client}
               reportCount={clientStats[client.id]?.count || 0}
               lastReportAt={clientStats[client.id]?.lastAt || null}
-              onEdit={() => openEdit(client)}
-              onDelete={() => deleteClient.mutate(client.id)}
+              onClick={() => navigate(`/clients/${client.id}`)}
             />
           ))}
         </div>
