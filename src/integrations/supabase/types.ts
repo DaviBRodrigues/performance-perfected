@@ -14,6 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_integrations: {
+        Row: {
+          account_id: string
+          account_name: string | null
+          client_id: string
+          created_at: string
+          credentials: Json | null
+          id: string
+          is_connected: boolean
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          account_name?: string | null
+          client_id: string
+          created_at?: string
+          credentials?: Json | null
+          id?: string
+          is_connected?: boolean
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          account_name?: string | null
+          client_id?: string
+          created_at?: string
+          credentials?: Json | null
+          id?: string
+          is_connected?: boolean
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_integrations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           account_id: string
@@ -98,6 +145,7 @@ export type Database = {
           data: Json
           end_date: string
           id: string
+          platform: string | null
           report_format_id: string | null
           start_date: string
           status: string | null
@@ -110,6 +158,7 @@ export type Database = {
           data?: Json
           end_date: string
           id?: string
+          platform?: string | null
           report_format_id?: string | null
           start_date: string
           status?: string | null
@@ -122,6 +171,7 @@ export type Database = {
           data?: Json
           end_date?: string
           id?: string
+          platform?: string | null
           report_format_id?: string | null
           start_date?: string
           status?: string | null

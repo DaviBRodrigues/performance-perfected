@@ -10,6 +10,21 @@ export interface Client {
   report_format?: ReportFormat;
 }
 
+export type Platform = 'meta_ads' | 'google_ads';
+
+export interface ClientIntegration {
+  id: string;
+  client_id: string;
+  user_id: string;
+  platform: Platform;
+  account_id: string;
+  account_name: string | null;
+  is_connected: boolean;
+  credentials: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Metric {
   key: string;
   label: string;
@@ -46,6 +61,7 @@ export interface Report {
   end_date: string;
   data: ReportData;
   status: 'pending' | 'processing' | 'completed' | 'error';
+  platform?: Platform;
   created_at: string;
   client?: Client;
   report_format?: ReportFormat;
@@ -85,6 +101,23 @@ export interface CampaignData {
   cost_per_purchase?: number;
   best_ad?: string;
 }
+
+export const PLATFORMS = {
+  meta_ads: {
+    id: 'meta_ads' as Platform,
+    name: 'Meta Ads',
+    icon: 'meta',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-100',
+  },
+  google_ads: {
+    id: 'google_ads' as Platform,
+    name: 'Google Ads',
+    icon: 'google',
+    color: 'text-red-500',
+    bgColor: 'bg-red-100',
+  },
+} as const;
 
 export const AVAILABLE_METRICS: Metric[] = [
   { key: 'reach', label: '👥 Alcance' },
